@@ -1,5 +1,6 @@
 # Example usage: ansible-playbook fresh_install.yaml
 # This playbook runs the initial setup tasks of a fresh CentOS or RedHat lab install.
+# Must have ansible version 2.7 or newer.
 
 ---
 - name: 'Determine what hosts are up'
