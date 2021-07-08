@@ -1,0 +1,135 @@
+# Example usage: ansible-playbook fresh_install.yaml
+# This playbook runs the initial setup tasks of a fresh CentOS or RedHat lab install.
+
+---
+- name: 'Determine what hosts are up'
+  hosts: 'lab_machines'
+  gather_facts: no
+  tasks:
+    - block:
+      - name: 'Test the connection to each host'
+        wait_for_connection:
+          timeout: 5
+        vars:
+          ansible_connection: 'ssh'
+      - name: 'Add reachable hosts to the running_hosts group'
+        group_by:
+          key: 'running_hosts'
+      rescue:
+        - debug:
+            msg: 'cannot connect to {{ inventory_hostname }}'
+
+- name: 'Fresh OS install tasks'
+  hosts: 'running_hosts'
+  gather_facts: yes
+
+  vars:
+   packages:
+    - 'redhat-lsb-core'
+    - 'net-tools'
+    - 'epel-release'
+    - 'kernel-headers'
+    - 'kernel-devel'
+    - 'tree'
+    - 'bash-completion'
+    - 'vim'
+    - 'bind-utils'
+    - '@Development'
+   bash: /bin/bash
+  
+  tasks:
+   - name: 'Check for Python3'
+     raw: 'test -e /usr/bin/python3'
+     changed_when: false
+     failed_when: false
+     register: check_python
+     args:
+       executable: '{{ bash }}'
+
+   - name: 'Install Python'
+     raw: 'yum install -y python3'
+     args:
+       executable: '{{ bash }}'
+     when: (not ansible_check_mode and check_python.rc != 0)
+       
+   - name: 'Copy rhel yum repository file'
+     copy:
+       src: '/home/billdote/ansible_vm/files/rhel_dvd.repo'
+       dest: '/etc/yum.repos.d/'
+       owner: 'root'
+       group: 'root'
+       mode: 0644
+     when: ansible_facts['distribution'] == 'RedHat'
+
+   - name: 'Copy rhel repo files from install dvd' # in place of using subscription
+     shell: |
+       mount /dev/sr0 /mnt
+       cd /mnt
+       find AppStream | cpio -pmd /var/repo
+       find BaseOS | cpio -pmd /var/repo
+     args:
+       executable: '{{ bash }}'
+     when: ansible_facts['distribution'] == 'RedHat'
+
+   - name: 'Install epel release manually'
+     shell: |
+       cd /tmp
+       wget https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm
+       yum install -y epel-release-latest-8.noarch.rpm
+     args:
+       executable: '{{ bash }}'
+     when: ansible_facts['distribution'] == 'RedHat'
+
+   - name: 'Upgrade all packages'
+     dnf:
+       name: '*'
+       state: latest
+     register: packagestatus  
+
+   - name: 'Install required packages'
+     dnf:
+      name: '{{ packages }}'
+      state: latest
+
+   - name: 'CentOS PowerTools and Plugins'
+     block:
+      - name: 'Install DNF plugins'
+        dnf:
+          name: 'dnf-plugins-core'
+          state: latest
+      - name: 'Enable PowerTools'
+        shell: |
+          yum config-manager --set-enabled powertools
+     when: (ansible_facts['distribution'] == 'CentOS' and ansible_facts['distribution_major_version'] == '8')  
+   
+   - name: 'Clean up'
+     shell: |
+       eject /mnt && echo 'Disk Ejected!'
+       yum clean all
+       yum repolist
+     register: shell_result
+     args:
+       executable: '{{ bash }}'
+     when: ansible_facts['distribution'] == 'RedHat'
+
+   - name: 'Output of clean up task'
+     debug: 
+       var: shell_result.stdout_lines
+     when: shell_result.stdout_lines is defined
+   
+   - name: 'Reboot the machine(s)'
+     block:
+       - name: 'Initiate reboot'
+         reboot:
+           reboot_timeout: 3600
+           msg: 'Reboot initiated by Ansible'
+       - name: 'Pause for a bit'
+         pause:
+           seconds: 10
+       - name: 'Wait for connection after reboot'
+         wait_for_connection:
+           connect_timeout: 20
+           sleep: 5
+           delay: 5
+           timeout: 90
+     when: 'packagestatus is changed'

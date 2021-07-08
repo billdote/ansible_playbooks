@@ -1,0 +1,11 @@
+[rhel_dvd_baseos]
+name=rhel dvd baseos
+baseurl=/var/repo/BaseOS
+enabled=1
+gpgcheck=0
+
+[rhel_dvd_appstream]
+name=rhel dvd appstream
+baseurl=/var/repo/AppStream
+enabled=1
+gpgcheck=0

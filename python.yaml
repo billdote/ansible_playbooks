@@ -1,0 +1,25 @@
+# Example usage: ansible-playbook python.yaml -i hosts --extra-vars "host=example"
+# This playbook installs Python3 on hosts that don't come pre-installed with Python.
+
+---
+- name: 'Python3 Checker'
+  hosts: '{{ host }}'
+  gather_facts: no
+
+  vars:
+    bash: /bin/bash
+
+  tasks:
+   - name: 'Check for Python3'
+     raw: 'test -e /usr/bin/python3'
+     changed_when: false
+     failed_when: false
+     register: check_python
+     args:
+       executable: '{{ bash }}'
+
+   - name: 'Install Python3'
+     raw: 'yum install -y python3'
+     args:
+       executable: '{{ bash }}'
+     when: check_python.rc != 0
