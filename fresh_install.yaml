@@ -46,12 +46,26 @@
      register: check_python
      args:
        executable: '{{ bash }}'
+   
+   - name: 'Check for DNF'
+     raw: 'test -e /usr/bin/dnf'
+     changed_when: false
+     failed_when: false
+     register: check_dnf
+     args:
+       executable: '{{ bash }}'
 
    - name: 'Install Python'
      raw: 'yum install -y python3'
      args:
        executable: '{{ bash }}'
      when: (not ansible_check_mode and check_python.rc != 0)
+
+   - name: 'Install DNF'
+     raw: 'yum install -y dnf'
+     args:
+       executable: '{{ bash }}'
+     when: (not ansible_check_mode and check_dnf.rc != 0)
        
    - name: 'Copy rhel yum repository file'
      copy:
@@ -133,4 +147,4 @@
            sleep: 5
            delay: 5
            timeout: 90
-     when: 'packagestatus is changed'
+     when: 'packagestatus.changed'
